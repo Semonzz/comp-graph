@@ -9,6 +9,9 @@ const LD EPS = 1e-9;
 
 using namespace std;
 
+// https://www.desmos.com/
+
+
 struct Point2D {
     LD x, y;
 };
