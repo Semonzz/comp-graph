@@ -109,52 +109,98 @@ void task2() {
     }
 }
 
-LD getAngle(Point2D v) {
-    LD angle = atan2l(v.y, v.x);
-    if (angle < 0) angle += 2 * PI;
-    return angle;
+Point3D subtract3D(Point3D a, Point3D b) {
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+LD dotProduct3D(Point3D a, Point3D b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+Point3D crossProduct3D(Point3D a, Point3D b) {
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
+
+bool isCorrectRay3D(Point3D A, Point3D B) {
+    LD dx = A.x - B.x, dy = A.y - B.y, dz = A.z - B.z;
+    return (dx * dx + dy * dy + dz * dz) > EPS * EPS;
 }
 
 void task3() {
-    cout << "\n--- Задание 3 ---" << '\n';
-    Point2D A, B, C, D;
-    cout << "Введите координаты точки A (x y): "; cin >> A.x >> A.y;
-    cout << "Введите координаты точки B (вершина угла) (x y): "; cin >> B.x >> B.y;
-    cout << "Введите координаты точки C (x y): "; cin >> C.x >> C.y;
-    cout << "Введите координаты точки D (x y): "; cin >> D.x >> D.y;
+    cout << "\n--- Задание 6 ---" << '\n';
+    Point3D A, B, C, D;
+    cout << "Введите координаты точки A (x y z): "; cin >> A.x >> A.y >> A.z;
+    cout << "Введите координаты точки B (вершина угла) (x y z): "; cin >> B.x >> B.y >> B.z;
+    cout << "Введите координаты точки C (x y z): "; cin >> C.x >> C.y >> C.z;
+    cout << "Введите координаты точки D (проверяемая) (x y z): "; cin >> D.x >> D.y >> D.z;
 
-    if (!isCorrectRay(B, A)) {
+    // Проверка на вырожденность лучей
+    if (!isCorrectRay3D(B, A)) {
         cout << "Ошибка: точки A и B совпадают! Луч [BA) не определён." << '\n';
         return;
     }
-    if (!isCorrectRay(B, C)) {
+    if (!isCorrectRay3D(B, C)) {
         cout << "Ошибка: точки C и B совпадают! Луч [BC) не определён." << '\n';
         return;
     }
-    if (!isCorrectRay(B, D)) {
+    if (!isCorrectRay3D(B, D)) {
         cout << "Ошибка: точки B и D совпадают! Луч [BD) не определён." << '\n';
         return;
     }
 
-    Point2D vecBA = { A.x - B.x, A.y - B.y };
-    Point2D vecBC = { C.x - B.x, C.y - B.y };
-    Point2D vecBD = { D.x - B.x, D.y - B.y };
+    // Векторы от вершины B
+    Point3D BA = subtract3D(A, B);
+    Point3D BC = subtract3D(C, B);
+    Point3D BD = subtract3D(D, B);
 
-    LD angleBA = getAngle(vecBA); //start
-    LD angleBC = getAngle(vecBC); //end
-    LD angleBD = getAngle(vecBD); //point
+    // Нормаль к плоскости угла: N = BA × BC
+    Point3D N = crossProduct3D(BA, BC);
+    LD nLen2 = dotProduct3D(N, N);
 
-    bool inside = false;
-
-    if (angleBA < angleBC) {
-        if (angleBD > angleBA && angleBD < angleBC) inside = true;
+    // 1. Проверка компланарности: D должна лежать в плоскости ABC
+    // Смешанное произведение (BD · N) должно быть ~0
+    if (fabsl(dotProduct3D(BD, N)) > EPS) {
+        cout << "Результат: Точка D НЕ лежит внутри угла ABC (не в плоскости)." << '\n';
+        return;
     }
-    else {
-        if (angleBD > angleBA || angleBD < angleBC) inside = true;
+
+    // 2. Вырожденный случай: A, B, C коллинеарны (N ~ 0)
+    if (nLen2 < EPS * EPS) {
+        // Угол 0° или 180°. Точка D должна быть на той же прямой.
+        Point3D cross_BD_BA = crossProduct3D(BD, BA);
+        if (dotProduct3D(cross_BD_BA, cross_BD_BA) > EPS * EPS) {
+            cout << "Результат: Точка D НЕ лежит внутри угла ABC." << '\n';
+            return;
+        }
+        // D на прямой AB. Для угла 180° считаем что внутри, для 0° - если в ту же сторону.
+        // Упрощенно: если скалярное BA·BC > 0 (угол 0), то D должна смотреть туда же.
+        if (dotProduct3D(BA, BC) > 0) {
+             if (dotProduct3D(BD, BA) >= -EPS)
+                cout << "Результат: Точка D лежит внутри угла ABC." << '\n';
+             else
+                cout << "Результат: Точка D НЕ лежит внутри угла ABC." << '\n';
+        } else {
+            cout << "Результат: Точка D лежит внутри угла ABC (развёрнутый случай)." << '\n';
+        }
+        return;
     }
+
+    // 3. Основной случай: проверяем ориентацию относительно нормали N
+    // D внутри, если она "слева" от BA и "слева" от BD (в системе координат с нормалью N)
+    // То есть: (BA × BD) сонаправлен с N, и (BD × BC) сонаправлен с N
+    
+    Point3D N1 = crossProduct3D(BA, BD); // нормаль для проверки D относительно BA
+    Point3D N2 = crossProduct3D(BD, BC); // нормаль для проверки C относительно BD
+
+    LD dot1 = dotProduct3D(N1, N); // > 0 если сонаправлены
+    LD dot2 = dotProduct3D(N2, N);
 
     cout << "Результат: ";
-    if (inside) {
+    if (dot1 >= -EPS && dot2 >= -EPS) {
         cout << "Точка D лежит внутри угла ABC." << '\n';
     }
     else {
