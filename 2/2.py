@@ -1,229 +1,198 @@
 import tkinter as tk
 import random
+import math
+import time
 
-class TetrisFalling:
+# ==========================================
+# МАТРИЧНЫЕ ОПЕРАЦИИ (из Части 1)
+# ==========================================
+
+def mat_mult(A, B):
+    result = [[0, 0, 0] for _ in range(3)]
+    for i in range(3):
+        for j in range(3):
+            total = 0
+            for k in range(3):
+                total += A[i][k] * B[k][j]
+            result[i][j] = total
+    return result
+
+def transform_point(point, matrix):
+    x, y = point
+    x_new = x * matrix[0][0] + y * matrix[1][0] + 1 * matrix[2][0]
+    y_new = x * matrix[0][1] + y * matrix[1][1] + 1 * matrix[2][1]
+    return x_new, y_new
+
+def translation_matrix(dx, dy):
+    return [[1, 0, 0],
+            [0, 1, 0],
+            [dx, dy, 1]]
+
+def rotation_matrix(angle_deg):
+    theta = math.radians(angle_deg)
+    c = math.cos(theta)
+    s = math.sin(theta)
+    return [[c, s, 0],
+            [-s, c, 0],
+            [0, 0, 1]]
+
+def rotation_around_point_matrix(angle_deg, cx, cy):
+    T_inv = translation_matrix(-cx, -cy)
+    R = rotation_matrix(angle_deg)
+    T = translation_matrix(cx, cy)
+    return mat_mult(mat_mult(T_inv, R), T)
+
+# ==========================================
+# ПАДАЮЩИЕ ФИГУРЫ
+# ==========================================
+
+BLOCK_SIZE = 30
+COLS = 10
+ROWS = 20
+WIDTH = COLS * BLOCK_SIZE
+HEIGHT = ROWS * BLOCK_SIZE
+
+# Фигуры: список блоков относительно "начала" фигуры
+SHAPES = [
+    [(0, 0), (1, 0), (2, 0), (3, 0)],  # I
+    [(0, 0), (1, 0), (0, 1), (1, 1)],  # O
+    [(0, 0), (1, 0), (2, 0), (1, 1)],  # T
+    [(0, 0), (1, 0), (1, 1), (2, 1)],  # S
+    [(0, 1), (1, 1), (1, 0), (2, 0)],  # Z
+    [(0, 0), (0, 1), (1, 1), (2, 1)],  # L
+    [(0, 1), (1, 1), (2, 1), (2, 0)],  # J
+]
+COLORS = ['cyan', 'yellow', 'purple', 'green', 'red', 'orange', 'blue']
+
+
+class FallingShapes:
     def __init__(self, root):
         self.root = root
-        self.root.title("Лабораторная 2 - Часть 2: Падающие фигуры Тетриса (Вариант 6)")
-        
-        # Параметры
-        self.block_size = 30
-        self.grid_width = 10
-        self.grid_height = 20
-        self.canvas_width = self.grid_width * self.block_size
-        self.canvas_height = self.grid_height * self.block_size
-        
-        # Фигуры Тетриса (координаты относительно центра)
-        self.tetrominoes = [
-            # I
-            [[-1, 0], [0, 0], [1, 0], [2, 0]],
-            # O
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            # T
-            [[-1, 0], [0, 0], [1, 0], [0, 1]],
-            # S
-            [[0, 0], [1, 0], [-1, 1], [0, 1]],
-            # Z
-            [[-1, 0], [0, 0], [0, 1], [1, 1]],
-            # J
-            [[-1, 0], [0, 0], [1, 0], [-1, 1]],
-            # L
-            [[-1, 0], [0, 0], [1, 0], [1, 1]]
-        ]
-        
-        self.colors = ['cyan', 'yellow', 'purple', 'green', 'red', 'blue', 'orange']
-        
-        # Создаем холст
-        self.canvas = tk.Canvas(root, width=self.canvas_width, 
-                               height=self.canvas_height, bg='black')
-        self.canvas.pack()
-        
-        # Создаем панель управления
-        self.create_controls()
-        
-        # Текущая фигура
-        self.current_piece = None
-        self.current_color = None
-        self.piece_x = self.grid_width // 2
-        self.piece_y = 0
-        
-        # Запущен ли процесс
-        self.is_running = False
-        
-        # Привязка клавиш
-        self.root.bind('<Left>', self.move_left)
-        self.root.bind('<Right>', self.move_right)
-        self.root.bind('<Down>', self.move_down)
-        self.root.bind('<Up>', self.rotate_piece)
-        self.root.bind('<space>', self.drop_piece)
-        
-        # Запускаем первую фигуру
-        self.new_piece()
-        
-        # Запускаем анимацию
-        self.animate()
-    
-    def create_controls(self):
-        control_frame = ttk.Frame(self.root)
-        control_frame.pack(pady=10)
-        
-        ttk.Label(control_frame, text="Управление:").grid(row=0, column=0, 
-                                                          columnspan=2, pady=5)
-        ttk.Label(control_frame, text="← → : Перемещение").grid(row=1, column=0, 
-                                                                sticky='w')
-        ttk.Label(control_frame, text="↑ : Поворот").grid(row=2, column=0, 
-                                                          sticky='w')
-        ttk.Label(control_frame, text="↓ : Ускорить падение").grid(row=3, column=0, 
-                                                                   sticky='w')
-        ttk.Label(control_frame, text="Пробел : Быстрое падение").grid(row=4, column=0, 
-                                                                       sticky='w')
-        
-        self.start_btn = ttk.Button(control_frame, text="Старт/Стоп", 
-                                    command=self.toggle_start)
-        self.start_btn.grid(row=5, column=0, padx=5, pady=5)
-        
-        self.reset_btn = ttk.Button(control_frame, text="Сброс", 
-                                    command=self.reset_game)
-        self.reset_btn.grid(row=5, column=1, padx=5, pady=5)
-        
-        self.status_label = ttk.Label(control_frame, text="Фигур упало: 0")
-        self.status_label.grid(row=6, column=0, columnspan=2, pady=5)
-        
-        self.pieces_dropped = 0
-    
-    def new_piece(self):
-        """Создание новой фигуры"""
-        idx = random.randint(0, len(self.tetrominoes) - 1)
-        self.current_piece = [coord[:] for coord in self.tetrominoes[idx]]
-        self.current_color = self.colors[idx]
-        self.piece_x = self.grid_width // 2
-        self.piece_y = 0
-        
-        # Проверка на проигрыш
-        if not self.is_valid_position(self.piece_x, self.piece_y, self.current_piece):
-            self.is_running = False
-            self.canvas.create_text(self.canvas_width // 2, self.canvas_height // 2,
-                                   text="GAME OVER", fill='red', font=('Arial', 30))
-    
-    def is_valid_position(self, px, py, piece):
-        """Проверка допустимости позиции"""
-        for block in piece:
-            x = px + block[0]
-            y = py + block[1]
-            
-            # Выход за границы
-            if x < 0 or x >= self.grid_width or y >= self.grid_height:
-                return False
-            # Отрицательный Y (над полем) - разрешаем
-            if y < 0:
-                continue
-        
-        return True
-    
-    def move_left(self, event):
-        if self.is_running:
-            if self.is_valid_position(self.piece_x - 1, self.piece_y, self.current_piece):
-                self.piece_x -= 1
-                self.draw()
-    
-    def move_right(self, event):
-        if self.is_running:
-            if self.is_valid_position(self.piece_x + 1, self.piece_y, self.current_piece):
-                self.piece_x += 1
-                self.draw()
-    
-    def move_down(self, event):
-        if self.is_running:
-            if self.is_valid_position(self.piece_x, self.piece_y + 1, self.current_piece):
-                self.piece_y += 1
-                self.draw()
-    
-    def rotate_piece(self, event):
-        if self.is_running and self.current_piece:
-            # Поворот на 90 градусов
-            rotated = []
-            for block in self.current_piece:
-                rotated.append([-block[1], block[0]])
-            
-            if self.is_valid_position(self.piece_x, self.piece_y, rotated):
-                self.current_piece = rotated
-                self.draw()
-    
-    def drop_piece(self, event):
-        if self.is_running:
-            while self.is_valid_position(self.piece_x, self.piece_y + 1, 
-                                        self.current_piece):
-                self.piece_y += 1
-            self.lock_piece()
-            self.draw()
-    
-    def lock_piece(self):
-        """Фиксация фигуры на поле"""
-        # Здесь можно добавить логику сохранения зафиксированных фигур
-        # Для простоты просто создаем новую фигуру
-        self.pieces_dropped += 1
-        self.status_label.config(text=f"Фигур упало: {self.pieces_dropped}")
-        self.new_piece()
-    
-    def toggle_start(self):
-        self.is_running = not self.is_running
-        if self.is_running:
-            self.start_btn.config(text="Стоп")
-        else:
-            self.start_btn.config(text="Старт")
-    
-    def reset_game(self):
-        self.pieces_dropped = 0
-        self.status_label.config(text="Фигур упало: 0")
-        self.canvas.delete("all")
-        self.draw_grid()
-        self.new_piece()
-        self.is_running = True
-        self.start_btn.config(text="Стоп")
-        self.draw()
-    
-    def draw_grid(self):
-        """Рисование сетки"""
-        for i in range(self.grid_width + 1):
-            x = i * self.block_size
-            self.canvas.create_line(x, 0, x, self.canvas_height, fill='gray')
-        for i in range(self.grid_height + 1):
-            y = i * self.block_size
-            self.canvas.create_line(0, y, self.canvas_width, y, fill='gray')
-    
-    def draw(self):
-        """Отрисовка текущей фигуры"""
-        self.canvas.delete("piece")
-        
-        if self.current_piece:
-            for block in self.current_piece:
-                x = (self.piece_x + block[0]) * self.block_size
-                y = (self.piece_y + block[1]) * self.block_size
-                
-                if y >= 0:  # Рисуем только видимые блоки
-                    self.canvas.create_rectangle(
-                        x + 1, y + 1, 
-                        x + self.block_size - 1, y + self.block_size - 1,
-                        fill=self.current_color, outline='white', tags="piece"
-                    )
-    
-    def animate(self):
-        """Анимация падения"""
-        if self.is_running:
-            if self.is_valid_position(self.piece_x, self.piece_y + 1, 
-                                     self.current_piece):
-                self.piece_y += 1
-                self.draw()
-            else:
-                self.lock_piece()
-                self.draw()
-        
-        self.root.after(500, self.animate)  # Скорость падения
+        self.root.title("Task2")
 
-# Добавляем импорт ttk
-import tkinter.ttk as ttk
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
+        self.canvas.pack()
+
+        self.current_shape = None
+        self.current_color = None
+        self.pos = (0, 0)  # Позиция фигуры на поле
+        self.fallen = False  # Флаг: фигура достигла дна
+
+        self.spawn_shape()
+
+        # Управление
+        self.root.bind("<Left>", lambda e: self.move(-1, 0))
+        self.root.bind("<Right>", lambda e: self.move(1, 0))
+        self.root.bind("<Down>", lambda e: self.move(0, 1))
+        self.root.bind("<Up>", lambda e: self.rotate())
+        self.root.bind("<space>", lambda e: self.instant_drop())
+
+        # Игровой цикл
+        self.last_time = time.time()
+        self.fall_speed = 0.4
+        self.game_loop()
+
+    def spawn_shape(self):
+        """Создаёт новую случайную фигуру вверху экрана"""
+        idx = random.randint(0, len(SHAPES) - 1)
+        self.current_shape = SHAPES[idx][:]  # Копия списка
+        self.current_color = COLORS[idx]
+        self.pos = (COLS // 2 - 1, -2)  # Старт сверху по центру
+        self.fallen = False
+
+    def get_center(self):
+        """Вычисляет центр масс фигуры для поворота"""
+        n = len(self.current_shape)
+        cx = sum(b[0] for b in self.current_shape) / n
+        cy = sum(b[1] for b in self.current_shape) / n
+        return cx, cy
+
+    def move(self, dx, dy):
+        """Сдвиг фигуры на (dx, dy) клеток"""
+        self.pos = (self.pos[0] + dx, self.pos[1] + dy)
+
+    def rotate(self):
+        """Поворот через матрицу, но с целочисленным pivot"""
+        if not self.current_shape:
+            return
+        
+        # Pivot — первый блок (целые координаты!)
+        pivot_x, pivot_y = self.current_shape[1]
+        
+        # Матрица поворота на 90°
+        rot_mat = rotation_matrix(90)
+        
+        new_blocks = []
+        for bx, by in self.current_shape:
+            # Сдвигаем к pivot
+            rel_x, rel_y = bx - pivot_x, by - pivot_y
+            
+            # Применяем матрицу к относительным координатам
+            rx, ry = transform_point((rel_x, rel_y), rot_mat)
+            
+            # Округляем и возвращаем к pivot
+            new_blocks.append((round(rx) + pivot_x, round(ry) + pivot_y))
+        
+        self.current_shape = new_blocks
+
+    def instant_drop(self):
+        """Мгновенное падение на дно"""
+        while not self.fallen:
+            self.pos = (self.pos[0], self.pos[1] + 1)
+            self.check_landed()
+
+    def check_landed(self):
+        """Проверяет, достигла ли фигура дна"""
+        # Находим самую нижнюю точку фигуры
+        max_y = max(by for _, by in self.current_shape)
+        bottom_y = self.pos[1] + max_y
+        
+        if bottom_y >= ROWS - 1:
+            self.fallen = True
+            # Через один тик очистим экран
+            self.root.after(200, self.reset_screen)
+
+    def reset_screen(self):
+        """Очистка экрана и спавн новой фигуры"""
+        self.spawn_shape()
+
+    def draw(self):
+        self.canvas.delete("all")
+        
+        # Сетка (для красоты)
+        for i in range(COLS + 1):
+            self.canvas.create_line(i * BLOCK_SIZE, 0, i * BLOCK_SIZE, HEIGHT, fill='#222')
+        for i in range(ROWS + 1):
+            self.canvas.create_line(0, i * BLOCK_SIZE, WIDTH, i * BLOCK_SIZE, fill='#222')
+        
+        # Рисуем текущую фигуру
+        if self.current_shape:
+            for bx, by in self.current_shape:
+                x = (self.pos[0] + bx) * BLOCK_SIZE
+                y = (self.pos[1] + by) * BLOCK_SIZE
+                # Рисуем только если блок в пределах экрана
+                if -BLOCK_SIZE < x < WIDTH and -BLOCK_SIZE < y < HEIGHT:
+                    self.canvas.create_rectangle(
+                        x + 2, y + 2, x + BLOCK_SIZE - 2, y + BLOCK_SIZE - 2,
+                        fill=self.current_color, outline='white'
+                    )
+
+    def game_loop(self):
+        if not self.fallen:
+            now = time.time()
+            if now - self.last_time > self.fall_speed:
+                self.pos = (self.pos[0], self.pos[1] + 1)
+                self.check_landed()
+                self.last_time = now
+            
+            self.draw()
+            self.root.after(30, self.game_loop)
+        else:
+            self.draw()
+            self.root.after(30, self.game_loop)
+
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TetrisFalling(root)
+    app = FallingShapes(root)
     root.mainloop()
