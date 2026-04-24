@@ -79,18 +79,18 @@ class RasterizationApp:
         dy = abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
         sy = 1 if y0 < y1 else -1
-        err = dx - dy
+        d = dx - dy
 
         while True:
             points.append((x0, y0))
             if x0 == x1 and y0 == y1:
                 break
-            e2 = 2 * err
-            if e2 > -dy:
-                err -= dy
+            d2 = 2 * d
+            if d2 > -dy:
+                d -= dy
                 x0 += sx
-            if e2 < dx:
-                err += dx
+            if d2 < dx:
+                d += dx
                 y0 += sy
         return points
 
