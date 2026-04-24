@@ -79,19 +79,28 @@ class RasterizationApp:
         dy = abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
         sy = 1 if y0 < y1 else -1
-        d = dx - dy
+        points.append((x0, y0))
 
-        while True:
-            points.append((x0, y0))
-            if x0 == x1 and y0 == y1:
-                break
-            d2 = 2 * d
-            if d2 > -dy:
-                d -= dy
-                x0 += sx
-            if d2 < dx:
-                d += dx
-                y0 += sy
+        if dx>=dy:
+            d = 2*dy-dx
+            while(x!=x1):
+                if d<0:
+                    d +=2*dy
+                else:
+                    y+=sy
+                    d+=2*(dy-dx)
+                x+=sx
+                points.append((x, y))
+        else:
+            d = 2*dx-dy
+            while(y!=y1):
+                if d<0:
+                    d +=2*dx
+                else:
+                    x+=sx
+                    d+=2*(dx-dy)
+                y+=sy
+                points.append((x, y))
         return points
 
     def draw_line_ui(self):
