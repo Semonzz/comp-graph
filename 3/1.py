@@ -125,12 +125,12 @@ class RasterizationApp:
 
         while x <= y:
             add_symmetric(x, y)
-            x += 1
             if d < 0:
-                d += 2 * x + 1
+                d += 2 * x + 3
             else:
                 y -= 1
-                d += 2 * (x - y) + 1
+                d += 2 * (x - y) + 5
+            x += 1
         return points
 
     def draw_circle_ui(self):
