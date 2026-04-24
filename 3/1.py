@@ -75,6 +75,8 @@ class RasterizationApp:
 
     def bresenham_line(self, x0, y0, x1, y1):
         points = []
+        x = x0
+        y = y0
         dx = abs(x1 - x0)
         dy = abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
