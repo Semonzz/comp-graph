@@ -75,23 +75,34 @@ class RasterizationApp:
 
     def bresenham_line(self, x0, y0, x1, y1):
         points = []
+        x = x0
+        y = y0
         dx = abs(x1 - x0)
         dy = abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
         sy = 1 if y0 < y1 else -1
-        err = dx - dy
+        points.append((x0, y0))
 
-        while True:
-            points.append((x0, y0))
-            if x0 == x1 and y0 == y1:
-                break
-            e2 = 2 * err
-            if e2 > -dy:
-                err -= dy
-                x0 += sx
-            if e2 < dx:
-                err += dx
-                y0 += sy
+        if dx>=dy:
+            d = 2*dy-dx
+            while(x!=x1):
+                if d<0:
+                    d +=2*dy
+                else:
+                    y+=sy
+                    d+=2*(dy-dx)
+                x+=sx
+                points.append((x, y))
+        else:
+            d = 2*dx-dy
+            while(y!=y1):
+                if d<0:
+                    d +=2*dx
+                else:
+                    x+=sx
+                    d+=2*(dx-dy)
+                y+=sy
+                points.append((x, y))
         return points
 
     def draw_line_ui(self):
@@ -125,12 +136,12 @@ class RasterizationApp:
 
         while x <= y:
             add_symmetric(x, y)
-            x += 1
             if d < 0:
-                d += 2 * x + 1
+                d += 2 * x + 3
             else:
                 y -= 1
-                d += 2 * (x - y) + 1
+                d += 2 * (x - y) + 5
+            x += 1
         return points
 
     def draw_circle_ui(self):
